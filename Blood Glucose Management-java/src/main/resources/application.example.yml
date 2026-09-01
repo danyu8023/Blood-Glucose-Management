@@ -1,0 +1,15 @@
+server:
+  port: 8080
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+tangan:
+  jwt-secret: ${JWT_SECRET}
+  access-token-expire-seconds: 3600
+  refresh-token-expire-seconds: 2592000
+  allowed-origins: ${ALLOW_ORIGINS:http://127.0.0.1:5173}

@@ -1,0 +1,20 @@
+# Java / Maven
+**/target/
+*.class
+
+# Frontend dependencies and build output
+**/node_modules/
+**/dist/
+**/.vite/
+**/.vite-temp/
+**/.ignored/
+.pnpm-store/
+
+# Local runtime and editor files
+*.log
+.env
+.env.*
+!.env.example
+
+# Local backend configuration may contain database credentials and JWT secrets.
+Blood Glucose Management-java/src/main/resources/application.yml

@@ -1,0 +1,3 @@
+-- Demo data is inserted idempotently by DataInitializer at application startup.
+-- Demo account: 13800000000 / 123456
+-- To regenerate data, remove only the demo rows from bloodmanage; do not truncate production tables.
