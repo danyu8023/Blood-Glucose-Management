@@ -28,7 +28,8 @@ public class InsightServiceImpl implements InsightService {
         UserAccount user = userService.require(userId);
         LocalDate day = date == null ? LocalDate.now(ZoneId.of(user.getTimezone())) : date;
         DateRange range = DateRange.of(day, day);
-        List<GlucoseRecord> glucose = glucoseRepository.findByUserIdAndDeletedFalseAndMeasuredAtBetween(userId, range.from(), range.to(), PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "measuredAt"))).getContent();
+        DateRange glucoseRange = DateRange.of(day.minusDays(6), day);
+        List<GlucoseRecord> glucose = glucoseRepository.findByUserIdAndDeletedFalseAndMeasuredAtBetween(userId, glucoseRange.from(), glucoseRange.to(), PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "measuredAt"))).getContent();
         GlucoseRecord latest = glucose.isEmpty() ? null : glucose.get(0);
         Map<String, Object> data = new LinkedHashMap<>(); data.put("date", day); data.put("latestGlucose", latest == null ? null : glucose(latest));
         data.put("timeInRange", percentageInRange(user, glucose)); data.put("streakDays", 6); data.put("variabilityIndex", variability(glucose));

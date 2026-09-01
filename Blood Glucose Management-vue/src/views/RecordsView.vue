@@ -3,7 +3,7 @@
     <PageHeader title="记录中心" :eyebrow="loggedIn ? `今天 · ${displayDate}` : '公开记录指南'" />
 
     <template v-if="loggedIn">
-      <div class="glass rounded-[26px] p-5 mb-4 flex items-center justify-between" :aria-busy="completionLoading">
+      <div class="glass completion-card rounded-[26px] p-5 mb-4 flex items-center justify-between" :aria-busy="completionLoading">
         <div>
           <p class="muted text-sm">今日完成</p>
           <p class="text-3xl font-semibold mt-1">{{ completedCount }} <span class="text-base font-normal muted">/ 4 项</span></p>
@@ -16,7 +16,7 @@
       </div>
 
       <p class="section-label">记录管理</p>
-      <div class="glass rounded-2xl px-4 mb-4">
+      <div class="glass record-actions rounded-2xl px-4 mb-4">
         <div v-for="item in actions" :key="item.addPath" class="action-row">
           <RouterLink :to="item.addPath" class="flex items-center gap-3 flex-1 min-w-0 no-underline text-[#1c1c1e]">
             <span class="w-11 h-11 rounded-xl grid place-items-center shrink-0" :class="item.bg"><i :class="['fa-solid', item.icon, item.color]" /></span>
@@ -26,7 +26,7 @@
         </div>
       </div>
 
-      <div class="glass rounded-2xl p-4">
+      <div class="glass recent-card rounded-2xl p-4">
         <div class="flex items-start justify-between"><div><h2 class="font-semibold">最近血糖</h2><p class="text-xs muted mt-1">最近 {{ recentRecords.length }} 条记录 · 点击查看详情</p></div><RouterLink to="/glucose-records" class="text-xs text-[#0a84ff]">查看全部</RouterLink></div>
         <div class="grid grid-cols-3 gap-2 mt-4 mb-3">
           <div class="rounded-xl bg-[#f7f7f9] p-2.5"><p class="text-[10px] muted">平均值</p><p class="text-base font-semibold mt-1">{{ recentAverage }}<small class="text-[10px] font-normal muted"> mmol/L</small></p></div>
