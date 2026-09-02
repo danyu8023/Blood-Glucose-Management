@@ -33,8 +33,16 @@ public class InsightServiceImpl implements InsightService {
         GlucoseRecord latest = glucose.isEmpty() ? null : glucose.get(0);
         Map<String, Object> data = new LinkedHashMap<>(); data.put("date", day); data.put("latestGlucose", latest == null ? null : glucose(latest));
         data.put("timeInRange", percentageInRange(user, glucose)); data.put("streakDays", 6); data.put("variabilityIndex", variability(glucose));
-        data.put("mealCheckIn", Map.of("completed", mealRepository.countByUserIdAndDeletedFalseAndEatenAtBetween(userId, range.from(), range.to()), "total", 3));
-        data.put("medicationCheckIn", Map.of("completed", medicationRepository.countByUserIdAndDeletedFalseAndTakenAtBetween(userId, range.from(), range.to()), "total", 2));
+        long glucoseToday = glucoseRepository.countByUserIdAndDeletedFalseAndMeasuredAtBetween(userId, range.from(), range.to());
+        long mealsToday = mealRepository.countByUserIdAndDeletedFalseAndEatenAtBetween(userId, range.from(), range.to());
+        long medicationToday = medicationRepository.countByUserIdAndDeletedFalseAndTakenAtBetween(userId, range.from(), range.to());
+        long exerciseToday = exerciseRepository.countByUserIdAndDeletedFalseAndStartedAtBetween(userId, range.from(), range.to());
+        data.put("glucoseCheckIn", Map.of("completed", glucoseToday, "total", 1));
+        data.put("mealCheckIn", Map.of("completed", mealsToday, "total", 3));
+        data.put("medicationCheckIn", Map.of("completed", medicationToday, "total", 2));
+        data.put("exerciseCheckIn", Map.of("completed", exerciseToday, "total", 1));
+        data.put("completion", Map.of("glucose", glucoseToday > 0, "meals", mealsToday > 0, "medication", medicationToday > 0, "exercise", exerciseToday > 0, "completed", List.of(glucoseToday > 0, mealsToday > 0, medicationToday > 0, exerciseToday > 0).stream().filter(Boolean::booleanValue).count(), "total", 4));
+        data.put("recentGlucose", glucose.stream().limit(20).map(this::glucose).toList());
         data.put("alerts", glucose.stream().filter(g -> "high".equals(g.getStatus()) || "critical_low".equals(g.getStatus())).map(g -> Map.of("type", g.getStatus(), "message", g.getValue() + " mmol/L，建议查看处理建议")).toList());
         data.put("chart", Map.of("labels", glucose.stream().map(g -> g.getMeasuredAt().toLocalTime().toString()).toList(), "values", glucose.stream().map(GlucoseRecord::getValue).toList()));
         return data;

@@ -10,6 +10,7 @@ import java.util.*;
 
 public interface ExerciseRecordRepository extends JpaRepository<ExerciseRecord, UUID> {
     Page<ExerciseRecord> findByUserIdAndDeletedFalseAndStartedAtBetween(UUID userId, OffsetDateTime from, OffsetDateTime to, Pageable pageable);
+    long countByUserIdAndDeletedFalseAndStartedAtBetween(UUID userId, OffsetDateTime from, OffsetDateTime to);
     Optional<ExerciseRecord> findByIdAndUserIdAndDeletedFalse(UUID id, UUID userId);
     @Query("select coalesce(sum(e.durationMinutes),0) from ExerciseRecord e where e.user.id=:uid and e.deleted=false and e.startedAt between :from and :to")
     Integer totalMinutes(@Param("uid") UUID userId, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);

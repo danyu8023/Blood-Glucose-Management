@@ -91,23 +91,12 @@ async function loadRecords() {
   if (!loggedIn.value) return
   completionLoading.value = true
   completionError.value = ''
-  const results = await Promise.allSettled([
-    apiClient.glucose(),
-    apiClient.glucose({ from: dateKey, to: dateKey }),
-    apiClient.meals({ date: dateKey }),
-    apiClient.medications({ date: dateKey }),
-    apiClient.exercises({ from: dateKey, to: dateKey })
-  ])
   try {
-    const [recentResult, glucoseToday, mealsToday, medicationsToday, exerciseToday] = results
-    if (recentResult.status === 'fulfilled') {
-      const result = recentResult.value
-      const periodNames: Record<string, string> = { fasting: '空腹', pre_meal: '餐前', post_meal: '餐后', bedtime: '睡前' }
-      store.commit('records/setGlucose', result.items.map(item => ({ id: String(item.id), value: Number(item.value), period: periodNames[String(item.period)] || String(item.period), measuredAt: String(item.measuredAt), time: new Date(String(item.measuredAt)).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }), note: String(item.note || ''), status: String(item.status || '') })))
-    }
-    const hasItems = (result: PromiseSettledResult<{ items: Array<Record<string, unknown>> }>) => result.status === 'fulfilled' && result.value.items.length > 0
-    completedCount.value = [glucoseToday, mealsToday, medicationsToday, exerciseToday].filter(hasItems).length
-    if (results.some(result => result.status === 'rejected')) completionError.value = '部分记录暂时无法同步'
+    const dashboard = await apiClient.dashboard() as any
+    const periodNames: Record<string, string> = { fasting: '空腹', pre_meal: '餐前', post_meal: '餐后', bedtime: '睡前' }
+    const items = Array.isArray(dashboard.recentGlucose) ? dashboard.recentGlucose : []
+    store.commit('records/setGlucose', items.map((item: Record<string, unknown>) => ({ id: String(item.id), value: Number(item.value), period: periodNames[String(item.period)] || String(item.period), measuredAt: String(item.measuredAt), time: new Date(String(item.measuredAt)).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }), note: String(item.note || ''), status: String(item.status || '') })))
+    completedCount.value = Number(dashboard.completion?.completed || 0)
   } finally {
     completionLoading.value = false
   }
