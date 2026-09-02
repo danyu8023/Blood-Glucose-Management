@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { createStore } from 'vuex'
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import { auth, type AuthState } from './store/modules/auth'
 import { records, type RecordsState } from './store/modules/records'
@@ -26,7 +26,7 @@ export interface RootState { auth: AuthState; records: RecordsState; ui: UiState
 // Vuex modules keep authentication, health records, and transient UI feedback isolated.
 const store = createStore<RootState>({ modules: { auth, records, ui } })
 const router = createRouter({
-  history: createWebHashHistory(),
+  history: createWebHistory(),
   routes: [
     { path: '/', redirect: '/home' },
     { path: '/home', component: HomeView },

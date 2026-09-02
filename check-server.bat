@@ -15,7 +15,7 @@ if errorlevel 1 (
 )
 
 echo [INFO] Checking server health on %SSH_TARGET% ...
-ssh %SSH_OPTIONS% "%SSH_TARGET%" "echo '--- UPTIME ---'; uptime; echo '--- SERVICES ---'; systemctl is-active nginx 2>/dev/null || true; pm2 status 2>/dev/null || true; echo '--- PORTS ---'; ss -ltnp 2>/dev/null | grep -E ':80 |:443 |:8080 ' || true; echo '--- RESOURCES ---'; free -h; df -h /; echo '--- RECENT API LOG ---'; pm2 logs blood-glucose-api --lines 40 --nostream 2>/dev/null || true; echo '--- NGINX ERRORS ---'; sudo tail -n 40 /var/log/nginx/error.log 2>/dev/null || true"
+ssh %SSH_OPTIONS% "%SSH_TARGET%" "echo '--- UPTIME ---'; uptime; echo '--- SERVICES ---'; systemctl is-active nginx 2>/dev/null || true; systemctl is-active blood-glucose-api.service 2>/dev/null || true; echo '--- RESTARTS ---'; systemctl show blood-glucose-api.service -p MainPID -p NRestarts -p Restart 2>/dev/null || true; echo '--- PORTS ---'; ss -ltnp 2>/dev/null | grep -E ':80 |:443 |:8080 ' || true; echo '--- RESOURCES ---'; free -h; df -h /; echo '--- PUBLIC HTTP ---'; curl -fsS --max-time 10 http://101.42.51.175/ -o /dev/null && echo HTTP_OK || echo HTTP_FAILED; echo '--- RECENT API LOG ---'; sudo journalctl -u blood-glucose-api.service -n 40 --no-pager 2>/dev/null || true; echo '--- NGINX ERRORS ---'; sudo tail -n 40 /var/log/nginx/error.log 2>/dev/null || true"
 if errorlevel 1 goto :fail
 
 echo.
@@ -23,10 +23,10 @@ set "FIX="
 set /p "FIX=Attempt to restart Nginx and the API now? [Y/N] "
 if /I not "%FIX%"=="Y" goto :done
 
-ssh %SSH_OPTIONS% "%SSH_TARGET%" "sudo systemctl restart nginx; cd '/home/ubuntu/workSpace/Blood-Glucose-Management/Blood Glucose Management-java'; JAR=$(find target -maxdepth 1 -type f -name '*.jar' ! -name '*plain.jar' | head -n 1); pm2 delete blood-glucose-api 2>/dev/null || true; for PID in $(sudo lsof -t -iTCP:8080 -sTCP:LISTEN 2>/dev/null); do sudo kill $PID || true; done; pm2 start java --name blood-glucose-api --interpreter none --time --restart-delay 5000 --max-memory-restart 512M -- -jar \"$JAR\"; pm2 save; sleep 5; curl -fsS --max-time 10 'http://127.0.0.1:8080/api/v1/public/articles?page=1&pageSize=1' >/dev/null && echo API_OK || echo API_CHECK_FAILED"
+ssh %SSH_OPTIONS% "%SSH_TARGET%" "sudo systemctl restart nginx; sudo systemctl restart blood-glucose-api.service; sleep 8; curl -fsS --max-time 10 'http://127.0.0.1:8080/api/v1/public/articles?page=1&pageSize=1' >/dev/null && echo API_OK || echo API_CHECK_FAILED"
 if errorlevel 1 goto :fail
 
-echo [OK] Recovery commands completed. Test https://zlywork.site/ again.
+echo [OK] Recovery commands completed. Test http://101.42.51.175/ again.
 goto :done
 
 :fail

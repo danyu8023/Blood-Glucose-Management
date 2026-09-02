@@ -25,7 +25,7 @@ function clearExpiredSession() {
   localStorage.removeItem('tangan_access_token')
   localStorage.removeItem('tangan_refresh_token')
   window.dispatchEvent(new CustomEvent('tangan:auth-expired'))
-  if (!window.location.hash.endsWith('/login')) window.location.hash = '#/login'
+  if (!window.location.pathname.endsWith('/login')) window.location.assign('/login')
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
