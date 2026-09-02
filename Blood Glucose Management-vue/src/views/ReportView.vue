@@ -53,7 +53,7 @@
               <polyline v-if="chartPoints" :points="chartPoints" fill="none" stroke="#1677ff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
               <circle v-for="point in chartDots" :key="`${point.x}-${point.y}`" :cx="point.x" :cy="point.y" r="4" fill="#fff" stroke="#1677ff" stroke-width="2" />
             </svg>
-            <div v-if="report.glucose.series.length" class="report-chart-labels"><span>{{ formatDate(report.glucose.series[0].date) }}</span><span>每日平均</span><span>{{ formatDate(report.glucose.series.at(-1)?.date) }}</span></div>
+            <div v-if="report.glucose.series.length" class="report-chart-labels"><span>{{ formatDate(report.glucose.series[0].date) }}</span><span>每日平均</span><span>{{ formatDate(report.glucose.series[report.glucose.series.length - 1]?.date) }}</span></div>
           </div>
           <div class="report-minmax mt-3">
             <span>最低 <b>{{ formatNumber(report.glucose.minimum) }}</b></span>
