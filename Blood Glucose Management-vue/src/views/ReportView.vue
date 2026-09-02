@@ -162,13 +162,55 @@ function formatDate(value?: unknown) { const text = value == null ? '' : String(
 function formatGenerated(value?: unknown) { const date = new Date(String(value || '')); return Number.isNaN(date.getTime()) ? '--' : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }
 function distributionWidth(count: number) { const total = report.value?.glucose.recordCount || 0; return total ? `${count * 100 / total}%` : '0%' }
 
+function numberValue(value: unknown, fallback = 0) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : fallback
+}
+
+function normalizeReport(value: unknown): HealthReport {
+  const source = value && typeof value === 'object' ? value as Record<string, any> : {}
+  const glucose = source.glucose && typeof source.glucose === 'object' ? source.glucose : {}
+  const medication = source.medication && typeof source.medication === 'object' ? source.medication : {}
+  const meals = source.meals && typeof source.meals === 'object' ? source.meals : {}
+  const exercise = source.exercise && typeof source.exercise === 'object' ? source.exercise : {}
+  const series = Array.isArray(glucose.series) ? glucose.series.map((item: any) => ({
+    date: item?.date == null ? '' : String(item.date),
+    average: numberValue(item?.average),
+    count: numberValue(item?.count)
+  })) : []
+  return {
+    period: source.period === '7d' || source.period === 'monthly' ? source.period : '30d',
+    from: source.from == null ? '' : String(source.from),
+    to: source.to == null ? '' : String(source.to),
+    days: numberValue(source.days),
+    generatedAt: source.generatedAt == null ? '' : String(source.generatedAt),
+    glucose: {
+      average: numberValue(glucose.average), minimum: numberValue(glucose.minimum), maximum: numberValue(glucose.maximum),
+      timeInRange: numberValue(glucose.timeInRange), recordCount: numberValue(glucose.recordCount), daysRecorded: numberValue(glucose.daysRecorded),
+      normalCount: numberValue(glucose.normalCount), highCount: numberValue(glucose.highCount), lowCount: numberValue(glucose.lowCount),
+      targetMin: numberValue(glucose.targetMin, 4.4), targetMax: numberValue(glucose.targetMax, 7.8), series
+    },
+    medication: {
+      hasData: Boolean(medication.hasData), scheduled: numberValue(medication.scheduled), taken: numberValue(medication.taken),
+      missed: numberValue(medication.missed), skipped: numberValue(medication.skipped), onTime: numberValue(medication.onTime), adherence: numberValue(medication.adherence)
+    },
+    meals: {
+      completed: numberValue(meals.completed), daysRecorded: numberValue(meals.daysRecorded), totalCarbohydrate: numberValue(meals.totalCarbohydrate), averageCarbohydrate: numberValue(meals.averageCarbohydrate)
+    },
+    exercise: {
+      minutes: numberValue(exercise.minutes), days: numberValue(exercise.days), sessions: numberValue(exercise.sessions), averageMinutes: numberValue(exercise.averageMinutes)
+    },
+    highlights: Array.isArray(source.highlights) ? source.highlights.map((item: unknown) => String(item)).filter(Boolean) : []
+  }
+}
+
 async function load() {
   const currentRequest = ++requestId
   loading.value = true
   error.value = ''
   try {
     const data = await apiClient.report(period.value)
-    if (currentRequest === requestId) report.value = data
+    if (currentRequest === requestId) report.value = normalizeReport(data)
   } catch (e) {
     if (currentRequest === requestId) error.value = e instanceof Error ? e.message : '报告加载失败'
   } finally {
