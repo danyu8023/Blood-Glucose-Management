@@ -1,6 +1,31 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8080/api/v1'
 
 export interface ApiResult<T> { code: number; message: string; data: T }
+export interface HealthReport {
+  period: '7d' | '30d' | 'monthly'
+  from: string
+  to: string
+  days: number
+  generatedAt: string
+  glucose: {
+    average: number
+    minimum: number
+    maximum: number
+    timeInRange: number
+    recordCount: number
+    daysRecorded: number
+    normalCount: number
+    highCount: number
+    lowCount: number
+    targetMin: number
+    targetMax: number
+    series: Array<{ date: string; average: number; count: number }>
+  }
+  medication: { hasData: boolean; scheduled: number; taken: number; missed: number; skipped: number; onTime: number; adherence: number }
+  meals: { completed: number; daysRecorded: number; totalCarbohydrate: number; averageCarbohydrate: number }
+  exercise: { minutes: number; days: number; sessions: number; averageMinutes: number }
+  highlights: string[]
+}
 type ListQuery = { date?: string; from?: string; to?: string }
 
 function withQuery(path: string, query: ListQuery = {}) {
@@ -64,7 +89,7 @@ export const apiClient = {
   updateMe: (payload: Record<string, unknown>) => api<Record<string, unknown>>('/me', { method: 'PATCH', body: JSON.stringify(payload) }),
   dashboard: () => api<Record<string, unknown>>('/dashboard'),
   trends: (range = '7d') => api<Record<string, unknown>>(`/glucose-trends?range=${range}`),
-  report: (period = '30d') => api<Record<string, unknown>>(`/reports/${period}`),
+  report: (period: '7d' | '30d' | 'monthly' = '30d') => api<HealthReport>(`/reports/${period}`),
   recommendations: (glucoseValue: number, period: string) => api<Record<string, unknown>>('/recommendations', { method: 'POST', body: JSON.stringify({ glucoseValue, period }) }),
   glucose: (query: ListQuery = {}) => api<{ items: Array<Record<string, unknown>> }>(withQuery('/glucose-records', query)),
   createGlucose: (payload: Record<string, unknown>) => api<Record<string, unknown>>('/glucose-records', { method: 'POST', body: JSON.stringify(payload) }),

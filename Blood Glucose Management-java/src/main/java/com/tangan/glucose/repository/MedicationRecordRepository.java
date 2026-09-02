@@ -10,6 +10,8 @@ import java.util.*;
 
 public interface MedicationRecordRepository extends JpaRepository<MedicationRecord, UUID> {
     Page<MedicationRecord> findByUserIdAndDeletedFalseAndTakenAtBetween(UUID userId, OffsetDateTime from, OffsetDateTime to, Pageable pageable);
+    @Query("select m from MedicationRecord m where m.user.id=:uid and m.deleted=false and coalesce(m.scheduledAt,m.takenAt,m.createdAt) between :from and :to order by coalesce(m.scheduledAt,m.takenAt,m.createdAt) desc")
+    List<MedicationRecord> findForReport(@Param("uid") UUID userId, @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
     Optional<MedicationRecord> findByIdAndUserIdAndDeletedFalse(UUID id, UUID userId);
     long countByUserIdAndDeletedFalseAndTakenAtBetween(UUID userId, OffsetDateTime from, OffsetDateTime to);
     @Modifying(clearAutomatically = true)

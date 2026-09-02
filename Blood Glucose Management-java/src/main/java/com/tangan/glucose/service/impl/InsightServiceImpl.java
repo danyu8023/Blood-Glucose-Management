@@ -76,16 +76,79 @@ public class InsightServiceImpl implements InsightService {
 
     @Override @Transactional(readOnly = true)
     public Map<String, Object> report(UUID userId, String period) {
-        LocalDate end = LocalDate.now(); LocalDate start = "monthly".equals(period) ? end.withDayOfMonth(1) : end.minusDays("30d".equals(period) ? 29 : 6);
-        DateRange range = DateRange.of(start, end); UserAccount user = userService.require(userId);
-        List<GlucoseRecord> glucose = glucoseRepository.findByUserIdAndDeletedFalseAndMeasuredAtBetween(userId, range.from(), range.to(), PageRequest.of(0, 2000)).getContent();
-        long taken = medicationRepository.countByUserIdAndDeletedFalseAndTakenAtBetween(userId, range.from(), range.to());
-        Map<String, Object> data = new LinkedHashMap<>(); data.put("period", period); data.put("from", start); data.put("to", end);
-        data.put("glucose", Map.of("average", round(avg(glucose)), "timeInRange", percentageInRange(user, glucose), "recordCount", glucose.size(), "highCount", glucose.stream().filter(g -> "high".equals(g.getStatus())).count(), "lowCount", glucose.stream().filter(g -> "low".equals(g.getStatus()) || "critical_low".equals(g.getStatus())).count()));
-        data.put("medication", Map.of("scheduled", Math.max(taken, 1) * 2, "taken", taken, "adherence", Math.round(taken * 100.0 / Math.max(taken, 1))));
-        long meals = mealRepository.countByUserIdAndDeletedFalseAndEatenAtBetween(userId, range.from(), range.to()); Integer minutes = exerciseRepository.totalMinutes(userId, range.from(), range.to());
-        data.put("meals", Map.of("completed", meals, "total", (end.toEpochDay() - start.toEpochDay() + 1) * 3)); data.put("exercise", Map.of("minutes", minutes, "days", minutes > 0 ? 1 : 0));
-        data.put("highlights", List.of("连续记录有助于发现餐后波动规律")); return data;
+        if (!Set.of("7d", "30d", "monthly").contains(period)) throw ApiException.badRequest("period 只能为 7d、30d 或 monthly");
+        UserAccount user = userService.require(userId);
+        ZoneId zone = ZoneId.of(user.getTimezone());
+        LocalDate end = LocalDate.now(zone);
+        LocalDate start = "monthly".equals(period) ? end.withDayOfMonth(1) : end.minusDays("30d".equals(period) ? 29 : 6);
+        int days = (int) (end.toEpochDay() - start.toEpochDay() + 1);
+        DateRange range = DateRange.of(start, end);
+
+        List<GlucoseRecord> glucose = glucoseRepository.findByUserIdAndDeletedFalseAndMeasuredAtBetween(userId, range.from(), range.to(), PageRequest.of(0, 5000, Sort.by("measuredAt"))).getContent();
+        List<MedicationRecord> medications = medicationRepository.findForReport(userId, range.from(), range.to());
+        List<MealRecord> meals = mealRepository.findByUserIdAndDeletedFalseAndEatenAtBetween(userId, range.from(), range.to(), PageRequest.of(0, 5000, Sort.by("eatenAt"))).getContent();
+        List<ExerciseRecord> exercises = exerciseRepository.findByUserIdAndDeletedFalseAndStartedAtBetween(userId, range.from(), range.to(), PageRequest.of(0, 5000, Sort.by("startedAt"))).getContent();
+
+        long normalCount = glucose.stream().filter(g -> inTarget(user, g)).count();
+        long highCount = glucose.stream().filter(g -> g.getValue().compareTo(user.getTargetMax()) > 0).count();
+        long lowCount = glucose.stream().filter(g -> g.getValue().compareTo(user.getTargetMin()) < 0).count();
+        long glucoseDays = glucose.stream().map(g -> g.getMeasuredAt().atZoneSameInstant(zone).toLocalDate()).distinct().count();
+        Map<LocalDate, List<GlucoseRecord>> glucoseByDay = glucose.stream().collect(Collectors.groupingBy(g -> g.getMeasuredAt().atZoneSameInstant(zone).toLocalDate(), TreeMap::new, Collectors.toList()));
+
+        long taken = medications.stream().filter(m -> "taken".equals(m.getStatus())).count();
+        long missed = medications.stream().filter(m -> "missed".equals(m.getStatus())).count();
+        long skipped = medications.stream().filter(m -> "skipped".equals(m.getStatus())).count();
+        long onTime = medications.stream().filter(this::takenOnTime).count();
+        int adherence = medications.isEmpty() ? 0 : (int) Math.round(taken * 100.0 / medications.size());
+
+        long mealDays = meals.stream().map(m -> m.getEatenAt().atZoneSameInstant(zone).toLocalDate()).distinct().count();
+        double totalCarbohydrate = meals.stream().map(MealRecord::getCarbohydrateGrams).filter(Objects::nonNull).mapToDouble(BigDecimal::doubleValue).sum();
+        long mealsWithCarbohydrate = meals.stream().filter(m -> m.getCarbohydrateGrams() != null).count();
+        int exerciseMinutes = exercises.stream().mapToInt(ExerciseRecord::getDurationMinutes).sum();
+        long exerciseDays = exercises.stream().map(e -> e.getStartedAt().atZoneSameInstant(zone).toLocalDate()).distinct().count();
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("period", period); data.put("from", start); data.put("to", end); data.put("days", days); data.put("generatedAt", OffsetDateTime.now(zone));
+        data.put("glucose", Map.ofEntries(
+                Map.entry("average", round(avg(glucose))), Map.entry("minimum", round(glucose.stream().mapToDouble(g -> g.getValue().doubleValue()).min().orElse(0))), Map.entry("maximum", round(glucose.stream().mapToDouble(g -> g.getValue().doubleValue()).max().orElse(0))),
+                Map.entry("timeInRange", glucose.isEmpty() ? 0 : (int) Math.round(normalCount * 100.0 / glucose.size())), Map.entry("recordCount", glucose.size()), Map.entry("daysRecorded", glucoseDays),
+                Map.entry("normalCount", normalCount), Map.entry("highCount", highCount), Map.entry("lowCount", lowCount),
+                Map.entry("targetMin", user.getTargetMin()), Map.entry("targetMax", user.getTargetMax()),
+                Map.entry("series", glucoseByDay.entrySet().stream().map(e -> Map.of("date", e.getKey(), "average", round(avg(e.getValue())), "count", e.getValue().size())).toList())));
+        data.put("medication", Map.of("hasData", !medications.isEmpty(), "scheduled", medications.size(), "taken", taken, "missed", missed, "skipped", skipped, "onTime", onTime, "adherence", adherence));
+        data.put("meals", Map.of("completed", meals.size(), "daysRecorded", mealDays, "totalCarbohydrate", round(totalCarbohydrate), "averageCarbohydrate", mealsWithCarbohydrate == 0 ? 0 : round(totalCarbohydrate / mealsWithCarbohydrate)));
+        data.put("exercise", Map.of("minutes", exerciseMinutes, "days", exerciseDays, "sessions", exercises.size(), "averageMinutes", exercises.isEmpty() ? 0 : round(exerciseMinutes * 1.0 / exercises.size())));
+        data.put("highlights", reportHighlights(glucose, normalCount, highCount, lowCount, glucoseDays, medications, adherence, meals, exerciseMinutes, exerciseDays));
+        return data;
+    }
+
+    private boolean inTarget(UserAccount user, GlucoseRecord record) {
+        return record.getValue().compareTo(user.getTargetMin()) >= 0 && record.getValue().compareTo(user.getTargetMax()) <= 0;
+    }
+
+    private boolean takenOnTime(MedicationRecord record) {
+        if (!"taken".equals(record.getStatus()) || record.getTakenAt() == null || record.getScheduledAt() == null) return false;
+        return Math.abs(Duration.between(record.getScheduledAt(), record.getTakenAt()).toMinutes()) <= 30;
+    }
+
+    private List<String> reportHighlights(List<GlucoseRecord> glucose, long normalCount, long highCount, long lowCount, long glucoseDays,
+                                          List<MedicationRecord> medications, int adherence, List<MealRecord> meals, int exerciseMinutes, long exerciseDays) {
+        List<String> highlights = new ArrayList<>();
+        if (glucose.isEmpty()) {
+            highlights.add("本期暂无血糖记录，完成测量后即可生成范围内比例和趋势分析。");
+        } else {
+            highlights.add("本期记录 " + glucose.size() + " 次血糖，覆盖 " + glucoseDays + " 天，平均值为 " + round(avg(glucose)) + " mmol/L。");
+            int timeInRange = (int) Math.round(normalCount * 100.0 / glucose.size());
+            if (lowCount > 0) highlights.add("有 " + lowCount + " 次血糖低于目标范围，建议关注发生时段并及时复测。");
+            if (highCount > 0) highlights.add("有 " + highCount + " 次血糖高于目标范围，可结合饮食和运动记录查找原因。");
+            if (lowCount == 0 && highCount == 0) highlights.add("本期所有血糖记录均处于个人目标范围内。");
+            else if (timeInRange >= 70) highlights.add("范围内比例为 " + timeInRange + "% ，整体控制较稳定，但仍需关注异常记录。");
+        }
+        if (!medications.isEmpty()) highlights.add("共记录 " + medications.size() + " 次用药计划，已服用依从率为 " + adherence + "% 。");
+        if (!meals.isEmpty()) highlights.add("饮食记录覆盖 " + meals.stream().map(m -> m.getEatenAt().toLocalDate()).distinct().count() + " 天，可用于对照餐后血糖变化。");
+        if (exerciseMinutes > 0) highlights.add("累计运动 " + exerciseMinutes + " 分钟，覆盖 " + exerciseDays + " 天。");
+        if (highlights.size() == 1 && glucose.isEmpty()) highlights.add("继续记录饮食、用药和运动后，报告会自动补充行为分析。");
+        return highlights.stream().limit(5).toList();
     }
 
     private Map<String, Object> glucose(GlucoseRecord r) { return Map.of("id", r.getId(), "value", r.getValue(), "unit", r.getUnit(), "period", r.getPeriod(), "measuredAt", r.getMeasuredAt(), "status", r.getStatus(), "note", r.getNote() == null ? "" : r.getNote()); }
