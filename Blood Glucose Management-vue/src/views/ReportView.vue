@@ -158,8 +158,8 @@ const targetBand = computed(() => {
 const distributionLabel = computed(() => report.value ? `范围内 ${report.value.glucose.normalCount} 次，偏高 ${report.value.glucose.highCount} 次，偏低 ${report.value.glucose.lowCount} 次` : '')
 
 function formatNumber(value: number) { return Number(value || 0).toFixed(1) }
-function formatDate(value?: string) { if (!value) return '--'; const parts = value.split('-'); return parts.length === 3 ? `${Number(parts[1])}/${Number(parts[2])}` : value }
-function formatGenerated(value: string) { return new Date(value).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }
+function formatDate(value?: unknown) { const text = value == null ? '' : String(value); if (!text) return '--'; const parts = text.split('-'); return parts.length >= 3 ? `${Number(parts[1])}/${Number(parts[2])}` : text }
+function formatGenerated(value?: unknown) { const date = new Date(String(value || '')); return Number.isNaN(date.getTime()) ? '--' : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }
 function distributionWidth(count: number) { const total = report.value?.glucose.recordCount || 0; return total ? `${count * 100 / total}%` : '0%' }
 
 async function load() {
